@@ -176,12 +176,3 @@ every active cycle. A silent, dark device tells the user immediately that someth
 | Predictable seed / repeating sequence | N/A (analogue timers) | No — ADC noise seed, unique on every power-on |
 
 ---
-
-## References / Further Reading
-
-- Hartmann, J. (1995). *Vibrational communication in fossorial mammals.* — documents mole
-  seismic sensitivity in the 50–1000 Hz range.
-- Quaranta, A. et al. (2004). *Habituation of wildlife to acoustic deterrents.* — general
-  review of habituation mechanisms and time-to-habituation across mammal species.
-- Hill, P.S.M. (2008). *Vibrational Communication in Animals.* Harvard University Press.
-  — comprehensive treatment of seismic communication and sensitivity in burrowing mammals.
