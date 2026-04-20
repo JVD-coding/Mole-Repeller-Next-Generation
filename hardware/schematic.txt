@@ -1,0 +1,188 @@
+Mole Repeller Next Generation — Circuit Diagrams
+=================================================
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  CIRCUIT 1 — VIBRATION MOTOR DRIVER                                         ║
+║  Pin D9 (PWM)  →  NPN transistor  →  Coin vibration motor                  ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+                         VCC (+5V)
+                            │
+                  ┌─────────┤
+                  │         │
+              1N4001      ┌─┴─┐
+            (flyback)     │   │  Vibration Motor
+            cathode ▲     │ M │  (coin type 3–5V DC,
+             = top  │     │   │   e.g. 1020/1027/Z4)
+                    │     └─┬─┘
+                  ──┤        │
+                    └────────┤ ◄── COLLECTOR
+                          ┌──┘
+                        ──┤  Q1: NPN  (2N2222 / BC547 / PN2222)
+                          └──┐
+                    ┌────────┤ ◄── BASE
+                    │
+                  [1kΩ]   ◄── base resistor (limits base current)
+                    │
+                  D9 (Arduino PWM)
+
+                          ──┐
+                            └──┤ ◄── EMITTER
+                               │
+                              GND
+
+  Component list:
+    Q1   NPN transistor  2N2222A  (or BC547, PN2222)
+    R1   Resistor        1kΩ  ¼W
+    D1   Diode           1N4001   (or 1N4148 for small motors)
+    M1   Vibration motor 3–5V coin vibration motor
+
+  Notes:
+    • The flyback diode is REQUIRED — the motor coil generates a voltage spike
+      when switched off that will damage the Arduino without it.
+    • analogWrite(PIN_MOTOR, 0..255) controls motor speed/intensity.
+    • Keep motor wiring short; add 100nF ceramic cap across motor terminals
+      to suppress RF interference.
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  CIRCUIT 2A — SPEAKER DRIVER (simple NPN, low power)                        ║
+║  Pin D3  →  NPN transistor  →  8Ω speaker                                   ║
+║  Best for: bench testing, small indoor speaker                               ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+                         VCC (+5V)
+                            │
+                           [R2]  47Ω  ¼W  (current limiter)
+                            │
+                            ├ ◄── COLLECTOR
+                         ┌──┘
+                       ──┤  Q2: NPN  (2N2222 / BC547)
+                         └──┐
+                    ┌────────┤ ◄── BASE
+                    │
+                  [1kΩ]
+                    │
+                  D3 (Arduino tone() output)
+
+                         ──┐
+                            └──┤ ◄── EMITTER
+                               │
+                            ┌──┴──┐
+                            │  8Ω │  Speaker  (0.5W min)
+                            │ SPK │
+                            └──┬──┘
+                               │
+                              GND
+
+  Component list:
+    Q2   NPN transistor   2N2222A  (or BC547)
+    R2   Resistor         47Ω  ¼W
+    R3   Resistor         1kΩ  ¼W
+    SPK  Speaker          8Ω  0.5W
+
+  Notes:
+    • Peak collector current ≈ (5V – 0.2V) / 47Ω ≈ 100mA — within 2N2222 limit.
+    • Volume is limited; suitable for indoor verification only.
+    • For outdoor use where speaker must project through soil, use Circuit 2B.
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  CIRCUIT 2B — SPEAKER DRIVER (LM386 amplifier, recommended for outdoor)     ║
+║  Pin D3  →  LM386 (1W audio amp)  →  8Ω speaker                             ║
+║  Best for: outdoor deployment, maximum ground coupling                       ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+                                            VCC (+5V)
+                                               │
+                                 ┌─────────────┤
+                                 │           [C5]  100µF  (power bypass)
+                                 │             │
+                     ┌───────────┼─────────────┘
+                     │           │ Pin 6 (VS)
+                     │     ┌─────┴─────┐
+    D3 ──[R4 10kΩ]──┤     │           │ Pin 5 (OUT) ──[C4]──┬── Speaker (+)
+         (volume     │     │   LM386   │  250µF               │
+          pot,       └────►│           │  electrolytic        │    ┌──────┐
+          optional)  Pin 3 │  (audio   │                      └────┤  8Ω  ├── GND
+                   (+in)   │   amp)    │                           │ SPK  │
+                           │           │ Pin 4 (GND) ──── GND     └──────┘
+    GND ────────────── Pin 2│           │
+                    (-in)  │           │ Pin 7 (bypass) ──[C3]── GND
+                           └─────┬─────┘                   10µF
+                            Pins 1 & 8
+                                 │
+                              [C2] 10µF   ◄── Connect for 200× gain (louder)
+                                 │            Leave open for 20× gain (default)
+
+  LM386 Pinout (DIP-8 top view):
+                          ┌─────────────┐
+                GAIN  1 ──┤             ├── 8  GAIN
+               -INPUT 2 ──┤   L M 3 8 6 ├── 7  BYPASS
+               +INPUT 3 ──┤             ├── 6  VS (+5V)
+                  GND 4 ──┤             ├── 5  OUTPUT
+                          └─────────────┘
+
+  Component list:
+    IC1  LM386N-1          audio power amplifier (DIP-8)
+    C2   Capacitor         10µF  electrolytic  (gain boost, pins 1-8)
+    C3   Capacitor         10µF  electrolytic  (bypass, pin 7)
+    C4   Capacitor         250µF electrolytic  (output coupling, 10V rating min)
+    C5   Capacitor         100µF electrolytic  (power supply decoupling)
+    R4   Potentiometer     10kΩ               (optional volume control)
+         or fixed resistor 1kΩ–4.7kΩ
+    SPK  Speaker           8Ω  1W–2W, 57mm or larger for low-freq response
+
+  Notes:
+    • LM386 runs from 4–12V; works fine from 3× AA or single 18650+boost.
+    • With C2 installed (pins 1-8): gain = 200×, noticeably louder outdoors.
+    • Larger speaker cone = more acoustic energy into soil = better mole effect.
+    • Mount speaker face-down on a wooden or metal plate pressed into soil
+      to maximise low-frequency ground coupling.
+    • tone() on D3 outputs a 5V square wave; the LM386 handles it cleanly
+      thanks to the input resistor and the IC's internal limiting.
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  FULL SYSTEM OVERVIEW                                                        ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+  Battery (+)
+      │
+      ├─── VCC (Arduino Pro Mini)
+      │         │
+      │       [MCU]  Arduino Pro Mini 5V/16MHz
+      │         │
+      │    D9 (PWM) ──────► Motor Driver (Circuit 1) ──► Vibration Motor
+      │    D3 (tone) ─────► LM386 Amp   (Circuit 2B) ──► Speaker
+      │    A0  (float)  ── entropy source for PRNG seed only
+      │    D13 (LED)    ── status indicator (onboard)
+      │
+  Battery (-)
+      │
+     GND ────────────────────── shared ground (MCU + both circuits)
+
+  Power options:
+    A) 3× AA alkaline in series (4.5V) → RAW pin on Pro Mini
+       — simple, ~100–300 h estimated life with deep sleep
+    B) 1× 18650 LiPo (3.7V) + MT3608 boost to 5V → VCC pin
+       — rechargeable via TP4056 module
+    C) 4× AA (6V) → 7805 or HT7550 regulator → 5V → VCC
+       — more stable voltage, lower efficiency
+
+  Ground spike installation:
+    ┌────────────────────────────────────────────────────────┐
+    │  Weatherproof box (IP65 ABS)                           │
+    │  [Arduino]  [LM386]  [Battery]                         │
+    └────────────┬────────────────────────────────────────── ┘
+                 │ cable gland
+                 │
+          Motor leads ──► motor clamped to top of spike
+          Speaker leads ─► speaker face-down on base plate
+                 │
+    ┌────────────▼──────────────┐
+    │  ▓▓▓▓▓▓▓  Ground Spike    │  30–50 cm steel or wood rod
+    │  ▓▓▓▓▓▓▓  driven into     │  driven into soil
+    │  ▓▓▓▓▓▓▓  soil            │
+    └───────────────────────────┘

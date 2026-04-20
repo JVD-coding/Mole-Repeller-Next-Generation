@@ -1,0 +1,61 @@
+Mole Repeller Next Generation — Hardware Wiring
+================================================
+
+MCU: Arduino Pro Mini 5V / 16MHz (ATmega328P)
+
+─── VIBRATION MOTOR CIRCUIT ───────────────────────────────────────────────────
+
+  Arduino D9 ──[1kΩ]──► NPN base  (e.g. 2N2222 / BC547 / PN2222)
+                          NPN emitter → GND
+                          NPN collector ──► Motor (-)
+                          Motor (+) ──► 5V
+                          Flyback diode: cathode → 5V, anode → Motor (-)
+                              (IN4001 or 1N4148 across motor terminals)
+
+  Suitable motors: 3–5V DC vibration coin motor, 1027 or 1020 type
+  PWM control → adjustable intensity (0–255)
+
+─── SPEAKER CIRCUIT ────────────────────────────────────────────────────────────
+
+  Option A — Transistor (louder, recommended for outdoor use)
+  Arduino D3 ──[1kΩ]──► NPN base
+                          NPN emitter → GND
+                          NPN collector ──► Speaker (-) 8Ω
+                          Speaker (+) ──► 5V via 47Ω series resistor
+                              (limits peak current to ~100mA)
+
+  Option B — Direct drive (small indoor speaker, simpler)
+  Arduino D3 ──[100Ω]──► Speaker (+)
+                          Speaker (-) → GND
+                          Max ~40mA, volume limited
+
+  Recommended: 8Ω 0.5W–2W speaker, 36mm diameter or larger for better
+  low-frequency response. Larger cone = more ground vibration coupling.
+
+─── POWER ──────────────────────────────────────────────────────────────────────
+
+  Option A — 3× AA alkaline (4.5V) → VCC pin directly
+             Estimated runtime: 100–300 h depending on soil type and sleep ratio
+
+  Option B — 18650 LiPo (3.7V) + TP4056 charger → 5V boost module → VCC
+             Rechargeable via micro-USB
+
+  Use 3.3V / 8MHz Pro Mini to halve active power consumption.
+  WDT deep sleep draws ~5µA; motor/speaker pulses are the dominant load.
+
+─── ANALOG ENTROPY PIN ─────────────────────────────────────────────────────────
+
+  A0 — leave floating (not connected). Used only at startup to seed the PRNG
+  by sampling ADC noise. Do NOT connect to anything.
+
+─── STATUS LED ─────────────────────────────────────────────────────────────────
+
+  D13 — onboard LED (Pro Mini has one built in)
+  Blinks 3× on power-up, then lights solid during each active cycle.
+
+─── OPTIONAL ENCLOSURE NOTES ───────────────────────────────────────────────────
+
+  - Mount speaker face-down or couple it to a ground spike for max soil coupling
+  - Vibration motor: glue to metal or wooden stake driven into ground
+  - Weatherproof box: IP65 ABS with cable glands for motor/speaker leads
+  - Spike length: 30–50 cm for best propagation through soil
