@@ -1,0 +1,105 @@
+Mole Repeller Next Generation — Parts List
+==========================================
+
+─── MICROCONTROLLER ────────────────────────────────────────────────────────────
+
+  Qty  Part                          Spec / Notes
+  ---  ----------------------------  -----------------------------------------
+   1   Arduino Pro Mini              ATmega328P, 5V / 16MHz
+                                     (use 3.3V / 8MHz for lower power draw)
+
+─── VIBRATION OUTPUT ───────────────────────────────────────────────────────────
+
+  Qty  Part                          Spec / Notes
+  ---  ----------------------------  -----------------------------------------
+   1   Vibration motor               3–5V DC coin or cylinder type
+                                     e.g. 1020, 1027, or Z4 series
+   1   NPN transistor                2N2222A  (or BC547, PN2222)
+   1   Resistor                      1kΩ  ¼W  (base resistor)
+   1   Flyback diode                 1N4001  (or 1N4148 for small motors)
+
+─── SPEAKER OUTPUT — OPTION A (simple, bench testing) ──────────────────────────
+
+  Qty  Part                          Spec / Notes
+  ---  ----------------------------  -----------------------------------------
+   1   Speaker                       8Ω  0.5W minimum
+   1   NPN transistor                2N2222A  (or BC547)
+   1   Resistor                      1kΩ  ¼W  (base resistor)
+   1   Resistor                      47Ω  ¼W  (collector current limiter)
+
+─── SPEAKER OUTPUT — OPTION B (LM386 amplifier, recommended for outdoor) ───────
+
+  Qty  Part                          Spec / Notes
+  ---  ----------------------------  -----------------------------------------
+   1   Speaker                       8Ω  1W–2W, 57mm diameter or larger
+                                     Larger cone = better low-freq soil coupling
+   1   IC                            LM386N-1  audio power amplifier  (DIP-8)
+   1   Capacitor                     10µF  electrolytic  (gain boost, pins 1–8)
+   1   Capacitor                     10µF  electrolytic  (bypass, pin 7)
+   1   Capacitor                     250µF electrolytic  10V rating min
+                                     (output coupling to speaker)
+   1   Capacitor                     100µF electrolytic  (power supply decoupling)
+   1   Resistor / potentiometer      1kΩ–10kΩ  (input volume / limiting)
+
+─── POWER ──────────────────────────────────────────────────────────────────────
+
+  Option A — AA batteries (simplest)
+  Qty  Part                          Spec / Notes
+  ---  ----------------------------  -----------------------------------------
+   3   AA alkaline battery           1.5V each → 4.5V total → RAW pin
+   1   AA battery holder             3× AA with leads
+
+  Option B — Rechargeable LiPo (recommended for long-term outdoor use)
+  Qty  Part                          Spec / Notes
+  ---  ----------------------------  -----------------------------------------
+   1   18650 Li-ion cell             3.7V  2000–3500mAh
+   1   TP4056 charger module         Micro-USB charging + protection
+   1   MT3608 boost converter        3.7V → 5V, set output to 5.0V
+
+  Option C — 4× AA regulated
+  Qty  Part                          Spec / Notes
+  ---  ----------------------------  -----------------------------------------
+   4   AA alkaline battery           6V total
+   1   AA battery holder             4× AA with leads
+   1   Voltage regulator             7805 or HT7550  (5V output)
+   2   Capacitor                     100nF ceramic  (regulator decoupling)
+
+─── PASSIVE COMPONENTS (general) ───────────────────────────────────────────────
+
+  Qty  Part                          Spec / Notes
+  ---  ----------------------------  -----------------------------------------
+   2   Capacitor                     100nF ceramic  (power rail decoupling
+                                     near Arduino VCC and motor driver)
+   1   Capacitor                     100nF ceramic  (across motor terminals,
+                                     suppresses RF interference)
+
+─── MECHANICAL / ENCLOSURE ─────────────────────────────────────────────────────
+
+  Qty  Part                          Spec / Notes
+  ---  ----------------------------  -----------------------------------------
+   1   Enclosure                     IP65 ABS weatherproof box
+                                     min. 80×60×40mm to fit Arduino + LM386
+   1   Ground stake                  Steel or aluminium rod, 30–50cm long
+                                     8–12mm diameter for soil penetration
+   2   Cable gland                   PG7 or M12, for motor and speaker leads
+   1   Speaker mount plate           Small aluminium or steel plate
+                                     face-down on soil for ground coupling
+
+─── OPTIONAL ────────────────────────────────────────────────────────────────────
+
+  Qty  Part                          Spec / Notes
+  ---  ----------------------------  -----------------------------------------
+   1   Capacitive soil moisture      For future adaptive power scaling
+       sensor                        e.g. Capacitive Soil Moisture Sensor v2.0
+   1   Status LED                    3mm or 5mm, any colour
+                                     (onboard LED on D13 may be sufficient)
+   1   Resistor                      220Ω  ¼W  (if using external LED on D13)
+
+─── TOOLS / CONSUMABLES ────────────────────────────────────────────────────────
+
+  - Soldering iron + solder
+  - Heat shrink tubing (assorted)
+  - Hook-up wire (22 AWG stranded, various colours)
+  - Epoxy or silicone sealant (weatherproofing cable entries)
+  - FTDI USB-to-serial adapter (for programming Arduino Pro Mini)
+    e.g. FTDI FT232RL breakout, 5V mode
