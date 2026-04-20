@@ -56,10 +56,19 @@ haptic actuator. Mass of eccentric weight: < 0.5g.*
 *Fig 6. Both BrightLife (green, left) and Pest Protest (black, right) disassembled side by
 side. Identical PCB, identical motor, different enclosure only.*
 
-![Both units with boxes](images/teardown-07-with-boxes.jpg)
-*Fig 7. Both units next to retail packaging. BrightLife claims "3 werk modi" (3 work modes)
-that change every 24 hours. Pest Protest claims "Drie trilstanden" (three vibration modes).
-Both are the same 3 fixed patterns from the same OEM firmware.*
+![Both units fully laid out](images/teardown-07-both-complete.jpg)
+*Fig 7. Both units fully laid out — heads, stakes, PCBs and motors separated.*
+
+![Both units with boxes](images/teardown-08-with-boxes.jpg)
+*Fig 8. Both units next to retail packaging showing product specifications.*
+
+![Boxes front — 3 modes](images/teardown-09-with-boxes-front.jpg)
+*Fig 9. Both boxes front view. BrightLife claims "3 werk modi" changing every 24 hours.
+Pest Protest claims "Drie trilstanden". Both are the same 3 fixed patterns from identical OEM firmware.*
+
+![x-pest.com manufacturer website](images/teardown-10-xpest-website.png)
+*Fig 10. x-pest.com — the OEM manufacturer behind both products. Same PCB, same firmware,
+sold to multiple brands.*
 
 ---
 
