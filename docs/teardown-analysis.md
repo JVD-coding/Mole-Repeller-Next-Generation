@@ -31,8 +31,6 @@ device in different plastic shells.
 
 ### Photos
 
-> Place teardown photos in `docs/images/` — suggested filenames below.
-
 ![Full unit and spike](images/teardown-01-full-unit.jpg)
 *Fig 1. BrightLife BL17 — complete unit with helical plastic ground spike.*
 
