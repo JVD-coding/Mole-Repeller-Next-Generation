@@ -1,60 +1,84 @@
 Mole Repeller Next Generation — Circuit Diagrams
 =================================================
+Target MCU: ESP32 DevKit C
 
 
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║  CIRCUIT 1 — VIBRATION MOTOR DRIVER                                         ║
-║  Pin D9 (PWM)  →  NPN transistor  →  Coin vibration motor                  ║
+║  CIRCUIT 1 — 12V VIBRATION MOTOR via RELAY                                  ║
+║  GPIO25  →  Relay module  →  12V vibration motor                            ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 
-                         VCC (+5V)
-                            │
-                  ┌─────────┤
-                  │         │
-              1N4001      ┌─┴─┐
-            (flyback)     │   │  Vibration Motor
-            cathode ▲     │ M │  (coin type 3–5V DC,
-             = top  │     │   │   e.g. 1020/1027/Z4)
-                    │     └─┬─┘
-                  ──┤        │
-                    └────────┤ ◄── COLLECTOR
-                          ┌──┘
-                        ──┤  Q1: NPN  (2N2222 / BC547 / PN2222)
-                          └──┐
-                    ┌────────┤ ◄── BASE
-                    │
-                  [1kΩ]   ◄── base resistor (limits base current)
-                    │
-                  D9 (Arduino PWM)
+  +12V supply
+      │
+    [COM] ── Relay contacts (SRD-05VDC or equivalent 10A relay module)
+    [NO ] ──────────────────────────────┐
+                                        │
+                                     ┌──┴──┐
+                              ┌──────┤  M  ├──────┐
+                              │      │ 12V │      │
+                              │      └─────┘      │
+                              │   Vibration Motor  │
+                              │                   │
+                           1N4001              12V GND (shared GND)
+                          (flyback,
+                          cathode to
+                          motor +)
 
-                          ──┐
-                            └──┤ ◄── EMITTER
-                               │
-                              GND
+  Relay module control side:
+      VCC  ──── 5V  (ESP32 DevKit 5V pin, or dedicated 5V reg)
+      GND  ──── GND (shared with ESP32 and 12V supply)
+      IN   ──── see below
+
+  ┌─ Option A: relay module with 3.3V-compatible input (recommended) ──────────┐
+  │  Many modules (e.g. KEYES with HEF4001 optocoupler) work at 3.3V logic:   │
+  │  GPIO25 ────────────────────────────── Relay IN                            │
+  └────────────────────────────────────────────────────────────────────────────┘
+
+  ┌─ Option B: standard relay module needs 5V signal ─────────────────────────┐
+  │  Add a 2N2222 level-shift transistor:                                      │
+  │                                                                            │
+  │    5V ──[1kΩ]──── Relay IN                                                 │
+  │                      │                                                     │
+  │                   COLLECTOR                                                 │
+  │                 ──┤ Q1: NPN (2N2222)                                       │
+  │                   └──┐                                                     │
+  │          [1kΩ] ──────┤ BASE ◄── GPIO25 (ESP32, 3.3V)                      │
+  │                   EMITTER                                                  │
+  │                      │                                                     │
+  │                     GND                                                    │
+  └────────────────────────────────────────────────────────────────────────────┘
 
   Component list:
-    Q1   NPN transistor  2N2222A  (or BC547, PN2222)
-    R1   Resistor        1kΩ  ¼W
-    D1   Diode           1N4001   (or 1N4148 for small motors)
-    M1   Vibration motor 3–5V coin vibration motor
+    K1   Relay module     5V coil, 10A contacts, optocoupler input
+                          e.g. SRD-05VDC-SL-C based module
+    Q1   NPN transistor   2N2222A  (Option B only)
+    R1   Resistor         1kΩ  ¼W  (Q1 base, Option B only)
+    R2   Resistor         1kΩ  ¼W  (5V pull-up, Option B only)
+    D1   Diode            1N4001   (flyback across motor terminals, always required)
+    C1   Capacitor        100nF ceramic  (across motor terminals, suppresses arcing)
+    M1   Vibration motor  12V DC with eccentric weight
+                          e.g. 775-series DC motor + bolt-on eccentric weight,
+                          or dedicated 12V vibration motor
 
   Notes:
-    • The flyback diode is REQUIRED — the motor coil generates a voltage spike
-      when switched off that will damage the Arduino without it.
-    • analogWrite(PIN_MOTOR, 0..255) controls motor speed/intensity.
-    • Keep motor wiring short; add 100nF ceramic cap across motor terminals
-      to suppress RF interference.
+    • 12V motor delivers far more mechanical energy than the 3V coin motors
+      used in commercial repellers — much better ground coupling via stake.
+    • Relay switching is on/off only — no PWM. Pattern timing controls the
+      vibration character instead of motor speed.
+    • Relay coil draws ~70–90mA from the 5V rail — use the DevKit 5V pin
+      (USB-powered) or a separate 5V regulator. Do not use the ESP32 3.3V pin.
+    • 12V and logic GND must be tied together at one point.
 
 
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║  CIRCUIT 2A — SPEAKER DRIVER (simple NPN, low power)                        ║
-║  Pin D3  →  NPN transistor  →  8Ω speaker                                   ║
+║  GPIO26  →  NPN transistor  →  8Ω speaker                                   ║
 ║  Best for: bench testing, small indoor speaker                               ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 
-                         VCC (+5V)
+                         +5V
                             │
-                           [R2]  47Ω  ¼W  (current limiter)
+                           [R2]  47Ω  ¼W
                             │
                             ├ ◄── COLLECTOR
                          ┌──┘
@@ -64,7 +88,7 @@ Mole Repeller Next Generation — Circuit Diagrams
                     │
                   [1kΩ]
                     │
-                  D3 (Arduino tone() output)
+                  GPIO26 (ESP32, 3.3V output)
 
                          ──┐
                             └──┤ ◄── EMITTER
@@ -79,22 +103,22 @@ Mole Repeller Next Generation — Circuit Diagrams
   Component list:
     Q2   NPN transistor   2N2222A  (or BC547)
     R2   Resistor         47Ω  ¼W
-    R3   Resistor         1kΩ  ¼W
+    R3   Resistor         1kΩ  ¼W  (base resistor — limits GPIO current)
     SPK  Speaker          8Ω  0.5W
 
   Notes:
-    • Peak collector current ≈ (5V – 0.2V) / 47Ω ≈ 100mA — within 2N2222 limit.
-    • Volume is limited; suitable for indoor verification only.
+    • ESP32 GPIO outputs 3.3V; 2N2222 base threshold is ~0.6V so it switches
+      reliably from 3.3V with a 1kΩ base resistor.
+    • Volume limited — suitable for bench testing only.
     • For outdoor use where speaker must project through soil, use Circuit 2B.
 
 
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║  CIRCUIT 2B — SPEAKER DRIVER (LM386 amplifier, recommended for outdoor)     ║
-║  Pin D3  →  LM386 (1W audio amp)  →  8Ω speaker                             ║
-║  Best for: outdoor deployment, maximum ground coupling                       ║
+║  GPIO26  →  LM386 (1W audio amp)  →  8Ω speaker                             ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 
-                                            VCC (+5V)
+                                            +5V
                                                │
                                  ┌─────────────┤
                                  │           [C5]  100µF  (power bypass)
@@ -102,14 +126,14 @@ Mole Repeller Next Generation — Circuit Diagrams
                      ┌───────────┼─────────────┘
                      │           │ Pin 6 (VS)
                      │     ┌─────┴─────┐
-    D3 ──[R4 10kΩ]──┤     │           │ Pin 5 (OUT) ──[C4]──┬── Speaker (+)
-         (volume     │     │   LM386   │  250µF               │
-          pot,       └────►│           │  electrolytic        │    ┌──────┐
-          optional)  Pin 3 │  (audio   │                      └────┤  8Ω  ├── GND
+    GPIO26 ──[R4]───┤     │           │ Pin 5 (OUT) ──[C4]──┬── Speaker (+)
+           10kΩ pot  │     │   LM386   │  250µF               │
+           (optional)└────►│           │  electrolytic        │    ┌──────┐
+                     Pin 3 │  (audio   │                      └────┤  8Ω  ├── GND
                    (+in)   │   amp)    │                           │ SPK  │
                            │           │ Pin 4 (GND) ──── GND     └──────┘
-    GND ────────────── Pin 2│           │
-                    (-in)  │           │ Pin 7 (bypass) ──[C3]── GND
+    GND ────────── Pin 2   │           │
+                   (-in)   │           │ Pin 7 (bypass) ──[C3]── GND
                            └─────┬─────┘                   10µF
                             Pins 1 & 8
                                  │
@@ -126,7 +150,7 @@ Mole Repeller Next Generation — Circuit Diagrams
 
   Component list:
     IC1  LM386N-1          audio power amplifier (DIP-8)
-    C2   Capacitor         10µF  electrolytic  (gain boost, pins 1-8)
+    C2   Capacitor         10µF  electrolytic  (gain boost, pins 1–8)
     C3   Capacitor         10µF  electrolytic  (bypass, pin 7)
     C4   Capacitor         250µF electrolytic  (output coupling, 10V rating min)
     C5   Capacitor         100µF electrolytic  (power supply decoupling)
@@ -135,54 +159,55 @@ Mole Repeller Next Generation — Circuit Diagrams
     SPK  Speaker           8Ω  1W–2W, 57mm or larger for low-freq response
 
   Notes:
-    • LM386 runs from 4–12V; works fine from 3× AA or single 18650+boost.
-    • With C2 installed (pins 1-8): gain = 200×, noticeably louder outdoors.
-    • Larger speaker cone = more acoustic energy into soil = better mole effect.
-    • Mount speaker face-down on a wooden or metal plate pressed into soil
-      to maximise low-frequency ground coupling.
-    • tone() on D3 outputs a 5V square wave; the LM386 handles it cleanly
-      thanks to the input resistor and the IC's internal limiting.
+    • LM386 input is 3.3V compatible — connect GPIO26 directly, no level shift.
+    • With C2 installed (pins 1–8): gain = 200×, significantly louder outdoors.
+    • Larger speaker cone = more acoustic energy into soil.
+    • Mount speaker face-down on a steel plate pressed into soil to maximise
+      low-frequency ground coupling.
 
 
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║  FULL SYSTEM OVERVIEW                                                        ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 
-  Battery (+)
+  12V supply ──────────────────────────── Relay COM → Motor
+                                          Relay coil (via 5V module)
+
+  5V supply (USB or regulator)
       │
-      ├─── VCC (Arduino Pro Mini)
+      ├──── ESP32 DevKit C (VIN or 5V pin)
       │         │
-      │       [MCU]  Arduino Pro Mini 5V/16MHz
+      │       [MCU]  ESP32 DevKit C
       │         │
-      │    D9 (PWM) ──────► Motor Driver (Circuit 1) ──► Vibration Motor
-      │    D3 (tone) ─────► LM386 Amp   (Circuit 2B) ──► Speaker
-      │    A0  (float)  ── entropy source for PRNG seed only
-      │    D13 (LED)    ── status indicator (onboard)
+      │    GPIO25 ──────────► Relay module IN → 12V motor
+      │    GPIO26 (tone()) ─► LM386 amp       → Speaker
+      │    GPIO34 (ADC, float) entropy source for PRNG seed only
+      │    GPIO2  (LED)    ─► status indicator (onboard)
       │
-  Battery (-)
-      │
-     GND ────────────────────── shared ground (MCU + both circuits)
+     GND ──────────────────── shared (ESP32 + relay module + 12V supply -)
 
   Power options:
-    A) 3× AA alkaline in series (4.5V) → RAW pin on Pro Mini
-       — simple, ~100–300 h estimated life with deep sleep
-    B) 1× 18650 LiPo (3.7V) + MT3608 boost to 5V → VCC pin
-       — rechargeable via TP4056 module
-    C) 4× AA (6V) → 7805 or HT7550 regulator → 5V → VCC
-       — more stable voltage, lower efficiency
+    A) USB power bank (5V) → DevKit USB → powers ESP32 + relay coil
+       Separate 8× AA (12V) or 3S LiPo (11.1V) → motor via relay
+    B) 12V SLA battery → relay motor
+       12V → HT7550 / LM7805 regulator → 5V → DevKit VIN
+       (single supply for whole system)
+    C) 12V Li-ion pack (3S, 11.1V nominal)
+       → XL4016 buck converter → 5V → DevKit
+       → relay COM directly
 
   Ground spike installation:
     ┌────────────────────────────────────────────────────────┐
     │  Weatherproof box (IP65 ABS)                           │
-    │  [Arduino]  [LM386]  [Battery]                         │
+    │  [ESP32]  [LM386]  [Relay module]  [5V reg]  [Battery] │
     └────────────┬────────────────────────────────────────── ┘
-                 │ cable gland
+                 │ cable glands (PG7 / M12)
                  │
-          Motor leads ──► motor clamped to top of spike
+          Motor leads ──► motor bolted to top of stake
           Speaker leads ─► speaker face-down on base plate
                  │
     ┌────────────▼──────────────┐
-    │  ▓▓▓▓▓▓▓  Ground Spike    │  30–50 cm steel or wood rod
+    │  ▓▓▓▓▓▓▓  Ground Stake    │  30–50 cm steel rod or rebar
     │  ▓▓▓▓▓▓▓  driven into     │  driven into soil
     │  ▓▓▓▓▓▓▓  soil            │
     └───────────────────────────┘

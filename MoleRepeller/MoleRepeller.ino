@@ -1,30 +1,34 @@
 /*
  * Mole Repeller - Next Generation
- * Target: Arduino Pro Mini (ATmega328P, 5V/16MHz)
+ * Target: ESP32 DevKit C
  *
  * Hardware:
- *   D9  → NPN base (via 1kΩ) → vibration motor (collector) → 5V
- *         Flyback diode across motor (cathode to 5V)
- *   D3  → NPN base (via 1kΩ) → 8Ω speaker (collector) → 5V
- *         (or direct drive with 100Ω series resistor for small speakers)
- *   A0  → floating (entropy source for RNG seed)
+ *   GPIO25 → Relay module IN → 12V vibration motor (via NO/COM terminals)
+ *            Relay module VCC → 5V, GND → GND
+ *            1N4001 flyback diode across motor terminals
+ *            Use a relay module rated for 3.3V input signal, or add a
+ *            2N2222 level-shift transistor between GPIO25 and the relay coil
+ *   GPIO26 → LM386 amplifier input → 8Ω speaker (1W min, 57mm+ cone)
+ *   GPIO2  → Status LED (onboard LED on most ESP32 DevKit boards)
+ *   GPIO34 → Floating ADC pin (input only) — entropy source for RNG seed
+ *   12V supply → relay COM terminal → motor
  *
  * Strategy:
- *   Five pattern types (burst, sweep, staccato, rumble, combo) are
- *   randomly dispatched in groups of 1–4 per wake cycle. Between cycles
- *   the MCU enters power-down sleep via the watchdog timer (8 s ticks),
- *   giving 30–180 s of silence to maximise battery life. The XOR-shift
- *   PRNG seeded from ADC noise ensures no two cycles are alike.
+ *   Five pattern types (burst, sweep, staccato, rumble, combo) are randomly
+ *   dispatched in groups of 1–4 per wake cycle. The relay switches the 12V
+ *   motor on/off; the LM386 speaker provides simultaneous low-frequency audio.
+ *   Between cycles the ESP32 enters deep sleep (~10µA) for 30–180 s.
+ *   The PRNG is re-seeded from ADC noise on every wake so no two cycles repeat.
  */
 
-#include <avr/sleep.h>
-#include <avr/wdt.h>
-#include <avr/power.h>
+#include <Arduino.h>
+#include "esp_sleep.h"
 
 // ── Pin assignments ──────────────────────────────────────────────────────────
-static const uint8_t PIN_MOTOR   = 9;   // PWM (Timer1)
-static const uint8_t PIN_SPEAKER = 3;   // tone() / PWM (Timer2)
-static const uint8_t PIN_LED     = 13;
+static const uint8_t PIN_RELAY   = 25;  // Relay IN — switches 12V motor
+static const uint8_t PIN_SPEAKER = 26;  // Speaker via LM386 amplifier
+static const uint8_t PIN_LED     = 2;   // Onboard LED (active HIGH on DevKit C)
+static const uint8_t PIN_ENTROPY = 34;  // Floating ADC (input-only pin, no pullup)
 
 // ── Frequency range perceived by moles (Hz) ─────────────────────────────────
 static const uint16_t FREQ_MIN =  50;
@@ -35,7 +39,7 @@ static const uint32_t SLEEP_MIN_MS =  30000UL;  // 30 s
 static const uint32_t SLEEP_MAX_MS = 180000UL;  // 3 min
 
 // ─────────────────────────────────────────────────────────────────────────────
-// XOR-shift 32-bit PRNG — fast and tiny on AVR
+// XOR-shift 32-bit PRNG — fast, no division, full 2^32 period
 // ─────────────────────────────────────────────────────────────────────────────
 static uint32_t rng_state;
 
@@ -44,7 +48,6 @@ static void rng_seed(uint32_t seed) {
 }
 
 // XOR-shift: 3 shifts produce a full-period sequence over all 2^32 non-zero values.
-// Costs 3 XOR+shift ops — negligible on AVR, no division needed.
 static uint32_t rng_next() {
     rng_state ^= rng_state << 13;
     rng_state ^= rng_state >> 17;
@@ -58,10 +61,10 @@ static uint32_t rng_range(uint32_t lo, uint32_t hi) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Motor helpers
+// Relay helpers — 12V motor is on/off only (relay cannot PWM)
 // ─────────────────────────────────────────────────────────────────────────────
-static inline void motorOn(uint8_t power) { analogWrite(PIN_MOTOR, power); }
-static inline void motorOff()             { analogWrite(PIN_MOTOR, 0); }
+static inline void motorOn()  { digitalWrite(PIN_RELAY, HIGH); }
+static inline void motorOff() { digitalWrite(PIN_RELAY, LOW);  }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Pattern 1 — BURST: sharp on/off pulses at random frequencies
@@ -72,7 +75,7 @@ static void patternBurst() {
         uint16_t freq = rng_range(FREQ_MIN, FREQ_MAX); // R: 50–800 Hz — different pitch every pulse
         uint16_t on   = rng_range(80, 400);            // R: pulse duration varies so rhythm is never fixed
         uint16_t off  = rng_range(50, 300);            // R: gap between pulses also varies
-        motorOn(255);
+        motorOn();
         tone(PIN_SPEAKER, freq, on);
         delay(on);
         motorOff();
@@ -85,16 +88,16 @@ static void patternBurst() {
 // Pattern 2 — SWEEP: continuous glide up or down while motor runs
 // ─────────────────────────────────────────────────────────────────────────────
 static void patternSweep() {
-    bool     asc    = rng_next() & 1;                               // R: direction up or down — coin flip each time
-    uint16_t start  = asc ? rng_range(FREQ_MIN, 200)               // R: ascending sweep starts low (50–200 Hz)
-                          : rng_range(400, FREQ_MAX);               //    descending sweep starts high (400–800 Hz)
-    uint16_t end    = asc ? rng_range(400, FREQ_MAX)               // R: ascending ends high
-                          : rng_range(FREQ_MIN, 200);               //    descending ends low
-    uint8_t  steps  = rng_range(20, 60);                           // R: 20–60 steps — controls sweep resolution
-    uint16_t stepMs = rng_range(20, 60);                           // R: 20–60 ms per step — controls sweep speed
+    bool     asc    = rng_next() & 1;                    // R: direction up or down — coin flip each time
+    uint16_t start  = asc ? rng_range(FREQ_MIN, 200)    // R: ascending sweep starts low (50–200 Hz)
+                          : rng_range(400, FREQ_MAX);    //    descending sweep starts high (400–800 Hz)
+    uint16_t end    = asc ? rng_range(400, FREQ_MAX)    // R: ascending ends high
+                          : rng_range(FREQ_MIN, 200);    //    descending ends low
+    uint8_t  steps  = rng_range(20, 60);                 // R: 20–60 steps — controls sweep resolution
+    uint16_t stepMs = rng_range(20, 60);                 // R: 20–60 ms per step — controls sweep speed
     int16_t  delta  = ((int16_t)end - (int16_t)start) / (int16_t)steps;
 
-    motorOn(rng_range(150, 255));                                   // R: motor intensity varies each sweep
+    motorOn();
     for (uint8_t i = 0; i < steps; i++) {
         tone(PIN_SPEAKER, (uint16_t)((int16_t)start + (int16_t)i * delta));
         delay(stepMs);
@@ -111,9 +114,9 @@ static void patternStaccato() {
     uint16_t baseFreq = rng_range(100, 600);  // R: base pitch shifts every staccato sequence
     for (uint8_t i = 0; i < pulses; i++) {
         uint16_t f = baseFreq + (uint16_t)rng_range(0, 80) - 40; // R: ±40 Hz jitter per pulse — never monotone
-        motorOn(rng_range(120, 255));          // R: motor strength varies pulse to pulse
+        motorOn();
         tone(PIN_SPEAKER, f);
-        delay(rng_range(30, 120));             // R: on-time varies — irregular clickering rhythm
+        delay(rng_range(30, 120));             // R: on-time varies — irregular clicking rhythm
         motorOff();
         noTone(PIN_SPEAKER);
         delay(rng_range(20, 100));             // R: off-time varies independently of on-time
@@ -131,7 +134,7 @@ static void patternRumble() {
     while (elapsed < duration) {
         uint16_t on  = rng_range(100, 500);        // R: motor beat length varies within the rumble
         uint16_t off = rng_range(50, 250);         // R: motor rest length varies — irregular heartbeat feel
-        motorOn(rng_range(180, 255));              // R: motor intensity varies beat to beat
+        motorOn();
         delay(on);
         motorOff();
         delay(off);
@@ -168,63 +171,41 @@ static const PatternFn PATTERNS[] = {
 static const uint8_t NUM_PATTERNS = sizeof(PATTERNS) / sizeof(PATTERNS[0]);
 
 static void runCycle() {
-    uint8_t count = rng_range(1, 4);                    // R: 1–4 patterns fired per wake — cycle length varies
+    uint8_t count = rng_range(1, 4);                // R: 1–4 patterns fired per wake — cycle length varies
     for (uint8_t i = 0; i < count; i++) {
-        PATTERNS[rng_next() % NUM_PATTERNS]();           // R: pattern type chosen independently each slot
-        delay(rng_range(200, 800));                      // R: inter-pattern pause varies — no fixed cadence
+        PATTERNS[rng_next() % NUM_PATTERNS]();       // R: pattern type chosen independently each slot
+        delay(rng_range(200, 800));                  // R: inter-pattern pause varies — no fixed cadence
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// WDT-based power-down sleep (8 s ticks)
+// ESP32 deep sleep — restarts from setup() on each wake
 // ─────────────────────────────────────────────────────────────────────────────
-volatile static uint8_t wdt_ticks;
-
-ISR(WDT_vect) { wdt_ticks++; }
-
 static void deepSleepMs(uint32_t ms) {
-    // Round up to nearest 8 s tick; minimum 1 tick
-    uint16_t target = (uint16_t)((ms + 7999UL) / 8000UL);
-    if (target == 0) target = 1;
-
-    set_sleep_mode(SLEEP_MODE_PWR_DOWN);
-    wdt_ticks = 0;
-
-    while (wdt_ticks < target) {
-        cli();
-        MCUSR &= ~(1 << WDRF);
-        WDTCSR |= (1 << WDCE) | (1 << WDE);
-        WDTCSR  = (1 << WDIE) | (1 << WDP3) | (1 << WDP0);  // 8 s timeout
-        wdt_reset();
-        sleep_enable();
-        power_adc_disable();
-        sei();
-        sleep_cpu();
-        sleep_disable();
-        power_adc_enable();
-    }
-    wdt_disable();
+    digitalWrite(PIN_RELAY, LOW);                              // ensure motor is off before sleep
+    esp_sleep_enable_timer_wakeup((uint64_t)ms * 1000ULL);    // timer wakeup, µs units
+    esp_deep_sleep_start();                                    // does not return
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Arduino entry points
 // ─────────────────────────────────────────────────────────────────────────────
 void setup() {
-    pinMode(PIN_MOTOR,   OUTPUT);
+    pinMode(PIN_RELAY,   OUTPUT);
     pinMode(PIN_SPEAKER, OUTPUT);
     pinMode(PIN_LED,     OUTPUT);
+    digitalWrite(PIN_RELAY, LOW);   // relay off at boot — motor must not fire until pattern starts
 
     // Seed RNG from ADC noise: floating pin produces random LSBs each read.
-    // 32 samples build a unique 32-bit seed so every power-on starts a
-    // different sequence — no two deployments ever repeat the same pattern.
+    // Re-seeded on every wake so each sleep cycle starts a unique sequence.
     uint32_t seed = 0;
     for (uint8_t i = 0; i < 32; i++) {
-        seed = (seed << 1) | (analogRead(A0) & 1);
+        seed = (seed << 1) | (analogRead(PIN_ENTROPY) & 1);
         delay(1);
     }
     rng_seed(seed);
 
-    // Quick startup blink so we know the device is alive
+    // Quick startup blink to confirm the device is alive after each wake
     for (uint8_t i = 0; i < 3; i++) {
         digitalWrite(PIN_LED, HIGH); delay(100);
         digitalWrite(PIN_LED, LOW);  delay(100);
@@ -237,4 +218,5 @@ void loop() {
     digitalWrite(PIN_LED, LOW);
 
     deepSleepMs(rng_range(SLEEP_MIN_MS, SLEEP_MAX_MS)); // R: 30–180 s silence — moles can't learn the interval
+    // deepSleepMs does not return — ESP32 wakes and restarts from setup()
 }

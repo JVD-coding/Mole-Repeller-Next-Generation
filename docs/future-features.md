@@ -160,16 +160,26 @@ migrate to an **Arduino Nano Every** (2× hardware UART, 6KB RAM) or **ESP32**
 
 ---
 
-## 4. Upgrade Path Summary
+## 4. MCU Platform — Why ESP32 is the Current Choice
 
-| Feature | Pro Mini sufficient? | Recommended MCU |
+The firmware already targets the **ESP32 DevKit C** as of this version. Here is why it
+was chosen over the original Arduino Pro Mini:
+
+| Requirement | Pro Mini | ESP32 |
 |---|---|---|
-| Mole detection (geophone only) | Yes, with sleep mode change | Pro Mini |
-| BLE mobile app only | Marginal — RAM tight | Nano 33 IoT |
-| Mesh network only | No — needs 2× UART | Nano Every |
-| Detection + app + mesh combined | No | **ESP32** |
+| Mole detection (geophone ADC) | Marginal — sleep mode conflict | Yes — ADC + deep sleep coexist |
+| BLE mobile app | No — needs external HM-10 module | Yes — built-in BLE 4.2 |
+| Mesh network (ESP-NOW) | No — needs external radio | Yes — built-in WiFi/ESP-NOW |
+| Hardware UART count | 1 | 3 |
+| RAM | 2KB | 520KB |
+| Deep sleep current | ~5µA | ~10µA |
+| 3.3V GPIO (relay note) | No — 5V GPIO | Yes — use 3.3V-compatible relay module |
+| Arduino IDE support | Yes | Yes (esp32 board package) |
+| Cost | ~€3 | ~€5–8 |
 
-The **ESP32** is the natural long-term platform: built-in BLE and WiFi cover the app,
-enough GPIO for detection and motor/speaker outputs, deep sleep at ~10µA, and full
-Arduino IDE support. All pattern and PRNG logic written for the Pro Mini ports directly
-with minimal changes.
+All pattern, PRNG, and sleep logic from the original Pro Mini sketch ports directly to
+ESP32 with only the sleep API changed (`esp_deep_sleep_start()` replaces WDT ticks).
+
+**3.3V relay note:** ESP32 GPIO is 3.3V. Use a relay module rated for 3.3V input (e.g.
+KEYES with HEF4001 optocoupler), or add a 2N2222 transistor level shifter between
+GPIO25 and the relay coil — see `hardware/schematic.txt` Circuit 1 for details.

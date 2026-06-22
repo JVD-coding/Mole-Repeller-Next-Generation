@@ -1,24 +1,35 @@
 Mole Repeller Next Generation — Parts List
 ==========================================
+Target MCU: ESP32 DevKit C
 
 ─── MICROCONTROLLER ────────────────────────────────────────────────────────────
 
   Qty  Part                          Spec / Notes
   ---  ----------------------------  -----------------------------------------
-   1   Arduino Pro Mini              ATmega328P, 5V / 16MHz
-                                     (use 3.3V / 8MHz for lower power draw)
+   1   ESP32 DevKit C                Dual-core 240MHz, 520KB RAM, built-in
+                                     BLE + WiFi, deep sleep ~10µA, 3.3V GPIO
+                                     Arduino IDE compatible (esp32 board package)
 
-─── VIBRATION OUTPUT ───────────────────────────────────────────────────────────
+─── 12V VIBRATION MOTOR + RELAY ────────────────────────────────────────────────
 
   Qty  Part                          Spec / Notes
   ---  ----------------------------  -----------------------------------------
-   1   Vibration motor               3–5V DC coin or cylinder type
-                                     e.g. 1020, 1027, or Z4 series
-   1   NPN transistor                2N2222A  (or BC547, PN2222)
-   1   Resistor                      1kΩ  ¼W  (base resistor)
-   1   Flyback diode                 1N4001  (or 1N4148 for small motors)
+   1   12V DC vibration motor        775-series DC motor with bolt-on eccentric
+                                     weight, or dedicated 12V vibration motor
+                                     e.g. RS Pro / Mouser 12V vibration motor
+                                     Much higher energy output than coin motors
+   1   Relay module (1-channel)      5V coil, 10A/250VAC contacts
+                                     Optocoupler input — use 3.3V-compatible
+                                     module (e.g. KEYES with HEF4001) to connect
+                                     directly to ESP32 GPIO, OR use Option B below
+   1   Diode                         1N4001  (flyback across motor terminals)
+   1   Capacitor                     100nF ceramic  (across motor terminals)
 
-─── SPEAKER OUTPUT — OPTION A (simple, bench testing) ──────────────────────────
+  Option B — level shift if relay module needs 5V signal:
+   1   NPN transistor                2N2222A
+   2   Resistor                      1kΩ  ¼W  (base + pull-up)
+
+─── SPEAKER OUTPUT — OPTION A (simple NPN, bench testing) ──────────────────────
 
   Qty  Part                          Spec / Notes
   ---  ----------------------------  -----------------------------------------
@@ -38,68 +49,71 @@ Mole Repeller Next Generation — Parts List
    1   Capacitor                     10µF  electrolytic  (bypass, pin 7)
    1   Capacitor                     250µF electrolytic  10V rating min
                                      (output coupling to speaker)
-   1   Capacitor                     100µF electrolytic  (power supply decoupling)
-   1   Resistor / potentiometer      1kΩ–10kΩ  (input volume / limiting)
+   1   Capacitor                     100µF electrolytic  (power decoupling)
+   1   Resistor / potentiometer      1kΩ–10kΩ  (input limiting / volume)
 
 ─── POWER ──────────────────────────────────────────────────────────────────────
 
-  Option A — AA batteries (simplest)
+  Option A — Dual supply (simplest split)
   Qty  Part                          Spec / Notes
   ---  ----------------------------  -----------------------------------------
-   3   AA alkaline battery           1.5V each → 4.5V total → RAW pin
-   1   AA battery holder             3× AA with leads
+   1   USB power bank  (5V)          Powers ESP32 DevKit + relay coil
+   8   AA alkaline battery           8× AA in series = ~12V for motor
+   1   AA battery holder             8× AA with leads and fuse
 
-  Option B — Rechargeable LiPo (recommended for long-term outdoor use)
+  Option B — Single 12V supply (recommended for permanent install)
   Qty  Part                          Spec / Notes
   ---  ----------------------------  -----------------------------------------
-   1   18650 Li-ion cell             3.7V  2000–3500mAh
-   1   TP4056 charger module         Micro-USB charging + protection
-   1   MT3608 boost converter        3.7V → 5V, set output to 5.0V
+   1   12V Li-ion pack               3S 18650 pack (11.1V nominal, ~12.6V full)
+                                     e.g. 3× 18650 in series holder
+   1   BMS / protection board        3S BMS with overcharge + short protection
+   1   Buck converter                XL4016 or LM2596 module, set to 5V output
+                                     Powers ESP32 + relay coil from 12V rail
+   1   Charger                       12.6V CC/CV charger for 3S pack
 
-  Option C — 4× AA regulated
+  Option C — 12V SLA (very long runtime, heavy)
   Qty  Part                          Spec / Notes
   ---  ----------------------------  -----------------------------------------
-   4   AA alkaline battery           6V total
-   1   AA battery holder             4× AA with leads
-   1   Voltage regulator             7805 or HT7550  (5V output)
-   2   Capacitor                     100nF ceramic  (regulator decoupling)
+   1   12V SLA battery               7Ah sealed lead-acid
+   1   Voltage regulator             LM7805 or HT7550 → 5V for ESP32
 
 ─── PASSIVE COMPONENTS (general) ───────────────────────────────────────────────
 
   Qty  Part                          Spec / Notes
   ---  ----------------------------  -----------------------------------------
-   2   Capacitor                     100nF ceramic  (power rail decoupling
-                                     near Arduino VCC and motor driver)
-   1   Capacitor                     100nF ceramic  (across motor terminals,
-                                     suppresses RF interference)
+   2   Capacitor                     100nF ceramic  (decoupling near ESP32 VIN
+                                     and relay module 5V)
 
 ─── MECHANICAL / ENCLOSURE ─────────────────────────────────────────────────────
 
   Qty  Part                          Spec / Notes
   ---  ----------------------------  -----------------------------------------
    1   Enclosure                     IP65 ABS weatherproof box
-                                     min. 80×60×40mm to fit Arduino + LM386
-   1   Ground stake                  Steel or aluminium rod, 30–50cm long
-                                     8–12mm diameter for soil penetration
-   2   Cable gland                   PG7 or M12, for motor and speaker leads
-   1   Speaker mount plate           Small aluminium or steel plate
-                                     face-down on soil for ground coupling
+                                     min. 120×80×50mm (ESP32 + relay + LM386)
+   1   Ground stake                  Steel rod or rebar, 30–50cm, 10–16mm dia
+                                     Larger diameter = better soil contact
+   2   Cable gland                   PG7 or M12 for motor and speaker leads
+   1   Speaker mount plate           Steel or aluminium flat plate
+                                     Face-down on soil for ground coupling
 
-─── OPTIONAL ────────────────────────────────────────────────────────────────────
+─── OPTIONAL / FUTURE FEATURES ─────────────────────────────────────────────────
 
   Qty  Part                          Spec / Notes
   ---  ----------------------------  -----------------------------------------
-   1   Capacitive soil moisture      For future adaptive power scaling
-       sensor                        e.g. Capacitive Soil Moisture Sensor v2.0
-   1   Status LED                    3mm or 5mm, any colour
-                                     (onboard LED on D13 may be sufficient)
-   1   Resistor                      220Ω  ¼W  (if using external LED on D13)
+   1   Geophone                      SM-24 or GS-100 (mole detection)
+                                     Connects to ESP32 ADC via LM358 pre-amp
+   1   Op-amp                        LM358  (geophone signal pre-amplifier)
+   1   HC-12 433MHz module           Mesh network communication (UART)
+                                     One per unit in a multi-unit deployment
+   1   Capacitive soil sensor        Soil moisture adaptive power scaling
+                                     e.g. Capacitive Soil Moisture Sensor v2.0
 
 ─── TOOLS / CONSUMABLES ────────────────────────────────────────────────────────
 
   - Soldering iron + solder
   - Heat shrink tubing (assorted)
-  - Hook-up wire (22 AWG stranded, various colours)
-  - Epoxy or silicone sealant (weatherproofing cable entries)
-  - FTDI USB-to-serial adapter (for programming Arduino Pro Mini)
-    e.g. FTDI FT232RL breakout, 5V mode
+  - Hook-up wire (22 AWG stranded for signal, 18 AWG for 12V motor leads)
+  - Fuse holder + 2A fuse  (inline on 12V motor lead)
+  - Epoxy or silicone sealant  (weatherproofing cable entries)
+  - USB-A to Micro-USB cable  (programming ESP32 DevKit C)
+  - Multimeter  (continuity, voltage checks)
