@@ -38,19 +38,18 @@ Target MCU: ESP32 DevKit C
    1   Resistor                      1kΩ  ¼W  (base resistor)
    1   Resistor                      47Ω  ¼W  (collector current limiter)
 
-─── SPEAKER OUTPUT — OPTION B (LM386 amplifier, recommended for outdoor) ───────
+─── SPEAKER OUTPUT — OPTION B (LM386 module, recommended for outdoor) ──────────
 
   Qty  Part                          Spec / Notes
   ---  ----------------------------  -----------------------------------------
    1   Speaker                       8Ω  1W–2W, 57mm diameter or larger
                                      Larger cone = better low-freq soil coupling
-   1   IC                            LM386N-1  audio power amplifier  (DIP-8)
-   1   Capacitor                     10µF  electrolytic  (gain boost, pins 1–8)
-   1   Capacitor                     10µF  electrolytic  (bypass, pin 7)
-   1   Capacitor                     250µF electrolytic  10V rating min
-                                     (output coupling to speaker)
-   1   Capacitor                     100µF electrolytic  (power decoupling)
-   1   Resistor / potentiometer      1kΩ–10kΩ  (input limiting / volume)
+   1   LM386 amplifier module        Pre-built PCB with LM386 + all capacitors
+                                     already soldered. Exposes 4 pins only:
+                                     VCC, GND, IN, OUT
+                                     Search: "LM386 Mini Audio Amplifier Module"
+                                     Runs 3V–12V, ~€1–2 on AliExpress/Amazon
+                                     No additional capacitors or resistors needed
 
 ─── POWER ──────────────────────────────────────────────────────────────────────
 
