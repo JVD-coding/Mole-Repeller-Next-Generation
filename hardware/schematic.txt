@@ -174,8 +174,8 @@ Target MCU: ESP32 DevKit C
     A) USB power bank (5V) → DevKit USB → powers ESP32 + relay coil
        Separate 8× AA (12V) or 3S LiPo (11.1V) → motor via relay
     B) 12V SLA battery → relay motor
-       12V → HT7550 / LM7805 regulator → 5V → DevKit VIN
-       (single supply for whole system)
+       12V → XL4016 buck converter (set 5V) → DevKit VIN
+       (single supply — ~87% efficient; do NOT use LM7805, only 42% efficient)
     C) 12V Li-ion pack (3S, 11.1V nominal)
        → XL4016 buck converter → 5V → DevKit
        → relay COM directly

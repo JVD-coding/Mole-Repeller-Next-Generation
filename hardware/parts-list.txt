@@ -74,7 +74,8 @@ Target MCU: ESP32 DevKit C
   Qty  Part                          Spec / Notes
   ---  ----------------------------  -----------------------------------------
    1   12V SLA battery               7Ah sealed lead-acid
-   1   Voltage regulator             LM7805 or HT7550 → 5V for ESP32
+   1   Buck converter                XL4016 module, set to 5V output (~87% eff.)
+                                     Do NOT use LM7805 (42% efficient, wastes ~3W)
 
 ─── PASSIVE COMPONENTS (general) ───────────────────────────────────────────────
 
