@@ -114,54 +114,38 @@ Target MCU: ESP32 DevKit C
 
 
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║  CIRCUIT 2B — SPEAKER DRIVER (LM386 amplifier, recommended for outdoor)     ║
-║  GPIO26  →  LM386 (1W audio amp)  →  8Ω speaker                             ║
+║  CIRCUIT 2B — SPEAKER DRIVER (LM386 MODULE, recommended for outdoor)        ║
+║  GPIO26  →  LM386 amplifier module (4 pins)  →  8Ω speaker                  ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 
-                                            +5V
-                                               │
-                                 ┌─────────────┤
-                                 │           [C5]  100µF  (power bypass)
-                                 │             │
-                     ┌───────────┼─────────────┘
-                     │           │ Pin 6 (VS)
-                     │     ┌─────┴─────┐
-    GPIO26 ──[R4]───┤     │           │ Pin 5 (OUT) ──[C4]──┬── Speaker (+)
-           10kΩ pot  │     │   LM386   │  250µF               │
-           (optional)└────►│           │  electrolytic        │    ┌──────┐
-                     Pin 3 │  (audio   │                      └────┤  8Ω  ├── GND
-                   (+in)   │   amp)    │                           │ SPK  │
-                           │           │ Pin 4 (GND) ──── GND     └──────┘
-    GND ────────── Pin 2   │           │
-                   (-in)   │           │ Pin 7 (bypass) ──[C3]── GND
-                           └─────┬─────┘                   10µF
-                            Pins 1 & 8
-                                 │
-                              [C2] 10µF   ◄── Connect for 200× gain (louder)
-                                 │            Leave open for 20× gain (default)
+  Use a pre-built LM386 amplifier MODULE — not the bare IC.
+  The module has the LM386 chip + all capacitors already soldered on board.
+  It exposes only 4 pins. Search: "LM386 Mini Audio Amplifier Module" (~€1–2)
 
-  LM386 Pinout (DIP-8 top view):
-                          ┌─────────────┐
-                GAIN  1 ──┤             ├── 8  GAIN
-               -INPUT 2 ──┤   L M 3 8 6 ├── 7  BYPASS
-               +INPUT 3 ──┤             ├── 6  VS (+5V)
-                  GND 4 ──┤             ├── 5  OUTPUT
-                          └─────────────┘
+  Wiring — just 4 connections:
+
+                    ┌─────────────────────┐
+                    │   LM386 MODULE      │
+                    │   (pre-built PCB)   │
+         5V ───────►│ VCC                 │
+        GND ───────►│ GND                 │
+     GPIO26 ───────►│ IN                  │
+                    │ OUT ────────────────┼──── Speaker (+)
+                    └─────────────────────┘
+                                               Speaker (-) ──── GND
+
+  That's it. No extra capacitors or resistors needed — they are on the module.
 
   Component list:
-    IC1  LM386N-1          audio power amplifier (DIP-8)
-    C2   Capacitor         10µF  electrolytic  (gain boost, pins 1–8)
-    C3   Capacitor         10µF  electrolytic  (bypass, pin 7)
-    C4   Capacitor         250µF electrolytic  (output coupling, 10V rating min)
-    C5   Capacitor         100µF electrolytic  (power supply decoupling)
-    R4   Potentiometer     10kΩ               (optional volume control)
-         or fixed resistor 1kΩ–4.7kΩ
-    SPK  Speaker           8Ω  1W–2W, 57mm or larger for low-freq response
+    MOD1  LM386 amplifier module   Pre-built PCB, 4 pins (VCC/GND/IN/OUT)
+                                   3V–12V supply, ~1W output into 8Ω
+                                   All passive components included on board
+    SPK   Speaker                  8Ω  1W–2W, 57mm or larger for best
+                                   low-frequency response and soil coupling
 
   Notes:
-    • LM386 input is 3.3V compatible — connect GPIO26 directly, no level shift.
-    • With C2 installed (pins 1–8): gain = 200×, significantly louder outdoors.
-    • Larger speaker cone = more acoustic energy into soil.
+    • GPIO26 (3.3V) connects directly to module IN — no level shift needed.
+    • Larger speaker cone = more acoustic energy transmitted into soil.
     • Mount speaker face-down on a steel plate pressed into soil to maximise
       low-frequency ground coupling.
 
