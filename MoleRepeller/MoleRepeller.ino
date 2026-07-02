@@ -10,7 +10,6 @@
  *            2N2222 level-shift transistor between GPIO25 and the relay coil
  *   GPIO26 → LM386 amplifier input → 8Ω speaker (1W min, 57mm+ cone)
  *   GPIO2  → Status LED (onboard LED on most ESP32 DevKit boards)
- *   GPIO34 → Floating ADC pin (input only) — entropy source for RNG seed
  *   12V supply → relay COM terminal → motor
  *
  * Strategy:
@@ -18,25 +17,27 @@
  *   dispatched in groups of 1–4 per wake cycle. The relay switches the 12V
  *   motor on/off; the LM386 speaker provides simultaneous low-frequency audio.
  *   Between cycles the ESP32 enters deep sleep (~10µA) for 30–180 s.
- *   The PRNG is re-seeded from ADC noise on every wake so no two cycles repeat.
+ *   The PRNG is re-seeded from the ESP32 hardware RNG on every wake.
  */
 
 #include <Arduino.h>
 #include "esp_sleep.h"
+#include "esp_random.h"
 
 // ── Pin assignments ──────────────────────────────────────────────────────────
 static const uint8_t PIN_RELAY   = 25;  // Relay IN — switches 12V motor
 static const uint8_t PIN_SPEAKER = 26;  // Speaker via LM386 amplifier
 static const uint8_t PIN_LED     = 2;   // Onboard LED (active HIGH on DevKit C)
-static const uint8_t PIN_ENTROPY = 34;  // Floating ADC (input-only pin, no pullup)
+// PIN_ENTROPY (GPIO34) removed — RNG now seeded from ESP32 hardware RNG (esp_random())
 
 // ── Frequency range perceived by moles (Hz) ─────────────────────────────────
 static const uint16_t FREQ_MIN =  50;
 static const uint16_t FREQ_MAX = 800;
 
 // ── Cycle sleep window (ms) ──────────────────────────────────────────────────
-static const uint32_t SLEEP_MIN_MS =  30000UL;  // 30 s
-static const uint32_t SLEEP_MAX_MS = 180000UL;  // 3 min
+// TEST VALUES — restore to 30000 / 180000 before deployment
+static const uint32_t SLEEP_MIN_MS =  3000UL;   // 3 s  (deploy: 30000)
+static const uint32_t SLEEP_MAX_MS =  8000UL;   // 8 s  (deploy: 180000)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // XOR-shift 32-bit PRNG — fast, no division, full 2^32 period
@@ -196,14 +197,9 @@ void setup() {
     pinMode(PIN_LED,     OUTPUT);
     digitalWrite(PIN_RELAY, LOW);   // relay off at boot — motor must not fire until pattern starts
 
-    // Seed RNG from ADC noise: floating pin produces random LSBs each read.
-    // Re-seeded on every wake so each sleep cycle starts a unique sequence.
-    uint32_t seed = 0;
-    for (uint8_t i = 0; i < 32; i++) {
-        seed = (seed << 1) | (analogRead(PIN_ENTROPY) & 1);
-        delay(1);
-    }
-    rng_seed(seed);
+    // Seed from ESP32 hardware RNG (thermal noise from RF subsystem).
+    // Genuinely random on every wake — no fixed pattern possible.
+    rng_seed(esp_random());
 
     // Quick startup blink to confirm the device is alive after each wake
     for (uint8_t i = 0; i < 3; i++) {
