@@ -14,64 +14,30 @@
  *
  * Strategy:
  *   Five pattern types (burst, sweep, staccato, rumble, combo) are randomly
- *   dispatched in groups of 1–4 per active cycle. The relay switches the 12V
+ *   dispatched in groups of 1–4 per wake cycle. The relay switches the 12V
  *   motor on/off; the LM386 speaker provides simultaneous low-frequency audio.
- *   Between cycles the device idles for 30–180 s before firing again.
- *   The PRNG is seeded once at boot from the ESP32 hardware RNG.
- *
- * HomeKit control:
- *   Exposes a single "Mole Repeller" on/off switch via HomeSpan (HAP over
- *   WiFi) so the device can be armed/disarmed from Apple's Home app or Siri.
- *   No deep sleep — HomeKit over WiFi requires the device to stay connected,
- *   so this build trades the ~10µA deep-sleep current for continuous WiFi
- *   power draw. Suits mains or frequently-recharged power, not long-runtime
- *   battery-only deployments.
- *
- *   Library: install "HomeSpan" (by Gregg Berman) via Arduino Library Manager.
- *   WiFi setup: open Serial Monitor at 115200 baud after first flash, press
- *   'W' and follow the prompts to enter your SSID/password — HomeSpan stores
- *   these in NVS, no credentials are hardcoded here. Pair the device to Home
- *   app using the default HomeSpan setup code shown in the Serial Monitor
- *   (or set a custom one via homeSpan.setPairingCode() below).
- *
- *   Turning the switch off takes effect at the end of the current pattern
- *   cycle, or immediately during the idle gap between cycles.
+ *   Between cycles the ESP32 enters deep sleep (~10µA) for 30–180 s.
+ *   The PRNG is re-seeded from the ESP32 hardware RNG on every wake.
  */
 
 #include <Arduino.h>
+#include "esp_sleep.h"
 #include "esp_random.h"
-#include <HomeSpan.h>
 
 // ── Pin assignments ──────────────────────────────────────────────────────────
 static const uint8_t PIN_RELAY   = 25;  // Relay IN — switches 12V motor
 static const uint8_t PIN_SPEAKER = 26;  // Speaker via LM386 amplifier
 static const uint8_t PIN_LED     = 2;   // Onboard LED (active HIGH on DevKit C)
+// PIN_ENTROPY (GPIO34) removed — RNG now seeded from ESP32 hardware RNG (esp_random())
 
 // ── Frequency range perceived by moles (Hz) ─────────────────────────────────
 static const uint16_t FREQ_MIN =  50;
 static const uint16_t FREQ_MAX = 800;
 
-// ── Idle gap between cycles while armed (ms) ─────────────────────────────────
+// ── Cycle sleep window (ms) ──────────────────────────────────────────────────
 // TEST VALUES — restore to 30000 / 180000 before deployment
-static const uint32_t IDLE_MIN_MS =  3000UL;   // 3 s  (deploy: 30000)
-static const uint32_t IDLE_MAX_MS =  8000UL;   // 8 s  (deploy: 180000)
-
-// ─────────────────────────────────────────────────────────────────────────────
-// HomeKit accessory — single on/off switch that arms/disarms the repeller
-// ─────────────────────────────────────────────────────────────────────────────
-struct MoleRepellerSwitch : Service::Switch {
-    SpanCharacteristic *power;
-
-    MoleRepellerSwitch() : Service::Switch() {
-        power = new Characteristic::On(false);
-    }
-
-    boolean update() override {
-        return true;
-    }
-};
-
-static MoleRepellerSwitch *moleSwitch;
+static const uint32_t SLEEP_MIN_MS =  3000UL;   // 3 s  (deploy: 30000)
+static const uint32_t SLEEP_MAX_MS =  8000UL;   // 8 s  (deploy: 180000)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // XOR-shift 32-bit PRNG — fast, no division, full 2^32 period
@@ -96,32 +62,6 @@ static uint32_t rng_range(uint32_t lo, uint32_t hi) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Timing helpers — keep HomeSpan's HAP connection alive during long waits
-// ─────────────────────────────────────────────────────────────────────────────
-
-// Waits exactly ms milliseconds while servicing HomeSpan — use inside a
-// pattern so its timing/rhythm is unaffected by HomeKit polling.
-static void pollDelay(uint32_t ms) {
-    uint32_t start = millis();
-    while ((millis() - start) < ms) {
-        homeSpan.poll();
-        delay(10);
-    }
-}
-
-// Waits up to ms milliseconds while servicing HomeSpan, but returns early if
-// the switch is turned off — used for the idle gap between cycles so
-// disarming from the Home app takes effect promptly instead of after the
-// full gap elapses.
-static void idleWait(uint32_t ms) {
-    uint32_t start = millis();
-    while ((millis() - start) < ms && moleSwitch->power->getVal()) {
-        homeSpan.poll();
-        delay(10);
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Relay helpers — 12V motor is on/off only (relay cannot PWM)
 // ─────────────────────────────────────────────────────────────────────────────
 static inline void motorOn()  { digitalWrite(PIN_RELAY, HIGH); }
@@ -138,10 +78,10 @@ static void patternBurst() {
         uint16_t off  = rng_range(50, 300);            // R: gap between pulses also varies
         motorOn();
         tone(PIN_SPEAKER, freq, on);
-        pollDelay(on);
+        delay(on);
         motorOff();
         noTone(PIN_SPEAKER);
-        pollDelay(off);
+        delay(off);
     }
 }
 
@@ -161,7 +101,7 @@ static void patternSweep() {
     motorOn();
     for (uint8_t i = 0; i < steps; i++) {
         tone(PIN_SPEAKER, (uint16_t)((int16_t)start + (int16_t)i * delta));
-        pollDelay(stepMs);
+        delay(stepMs);
     }
     noTone(PIN_SPEAKER);
     motorOff();
@@ -177,10 +117,10 @@ static void patternStaccato() {
         uint16_t f = baseFreq + (uint16_t)rng_range(0, 80) - 40; // R: ±40 Hz jitter per pulse — never monotone
         motorOn();
         tone(PIN_SPEAKER, f);
-        pollDelay(rng_range(30, 120));         // R: on-time varies — irregular clicking rhythm
+        delay(rng_range(30, 120));             // R: on-time varies — irregular clicking rhythm
         motorOff();
         noTone(PIN_SPEAKER);
-        pollDelay(rng_range(20, 100));         // R: off-time varies independently of on-time
+        delay(rng_range(20, 100));             // R: off-time varies independently of on-time
     }
 }
 
@@ -196,9 +136,9 @@ static void patternRumble() {
         uint16_t on  = rng_range(100, 500);        // R: motor beat length varies within the rumble
         uint16_t off = rng_range(50, 250);         // R: motor rest length varies — irregular heartbeat feel
         motorOn();
-        pollDelay(on);
+        delay(on);
         motorOff();
-        pollDelay(off);
+        delay(off);
         elapsed += (uint32_t)on + off;
     }
     noTone(PIN_SPEAKER);
@@ -210,16 +150,16 @@ static void patternRumble() {
 // ─────────────────────────────────────────────────────────────────────────────
 static void patternCombo() {
     patternBurst();
-    pollDelay(rng_range(100, 400));   // R: gap between sub-patterns varies
+    delay(rng_range(100, 400));   // R: gap between sub-patterns varies
     patternSweep();
-    pollDelay(rng_range(100, 300));   // R: second gap independent of first
+    delay(rng_range(100, 300));   // R: second gap independent of first
     patternStaccato();
     // Each sub-pattern carries its own internal randomisation (see above),
     // so combo produces the highest variety of any single pattern type.
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Pattern dispatcher — pick 1–4 random patterns per cycle
+// Pattern dispatcher — pick 1–4 random patterns per wake cycle
 // ─────────────────────────────────────────────────────────────────────────────
 typedef void (*PatternFn)();
 static const PatternFn PATTERNS[] = {
@@ -232,48 +172,47 @@ static const PatternFn PATTERNS[] = {
 static const uint8_t NUM_PATTERNS = sizeof(PATTERNS) / sizeof(PATTERNS[0]);
 
 static void runCycle() {
-    uint8_t count = rng_range(1, 4);                // R: 1–4 patterns fired per cycle — cycle length varies
+    uint8_t count = rng_range(1, 4);                // R: 1–4 patterns fired per wake — cycle length varies
     for (uint8_t i = 0; i < count; i++) {
         PATTERNS[rng_next() % NUM_PATTERNS]();       // R: pattern type chosen independently each slot
-        pollDelay(rng_range(200, 800));              // R: inter-pattern pause varies — no fixed cadence
+        delay(rng_range(200, 800));                  // R: inter-pattern pause varies — no fixed cadence
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ESP32 deep sleep — restarts from setup() on each wake
+// ─────────────────────────────────────────────────────────────────────────────
+static void deepSleepMs(uint32_t ms) {
+    digitalWrite(PIN_RELAY, LOW);                              // ensure motor is off before sleep
+    esp_sleep_enable_timer_wakeup((uint64_t)ms * 1000ULL);    // timer wakeup, µs units
+    esp_deep_sleep_start();                                    // does not return
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Arduino entry points
 // ─────────────────────────────────────────────────────────────────────────────
 void setup() {
-    Serial.begin(115200);
-
     pinMode(PIN_RELAY,   OUTPUT);
     pinMode(PIN_SPEAKER, OUTPUT);
     pinMode(PIN_LED,     OUTPUT);
     digitalWrite(PIN_RELAY, LOW);   // relay off at boot — motor must not fire until pattern starts
 
     // Seed from ESP32 hardware RNG (thermal noise from RF subsystem).
+    // Genuinely random on every wake — no fixed pattern possible.
     rng_seed(esp_random());
 
-    // Quick startup blink to confirm the device is alive before WiFi connects
+    // Quick startup blink to confirm the device is alive after each wake
     for (uint8_t i = 0; i < 3; i++) {
         digitalWrite(PIN_LED, HIGH); delay(100);
         digitalWrite(PIN_LED, LOW);  delay(100);
     }
-
-    homeSpan.begin(Category::Switches, "Mole Repeller");
-
-    new SpanAccessory();
-        new Service::AccessoryInformation();
-            new Characteristic::Identify();
-        moleSwitch = new MoleRepellerSwitch();
 }
 
 void loop() {
-    homeSpan.poll();
+    digitalWrite(PIN_LED, HIGH);
+    runCycle();
+    digitalWrite(PIN_LED, LOW);
 
-    if (moleSwitch->power->getVal()) {
-        digitalWrite(PIN_LED, HIGH);
-        runCycle();
-        digitalWrite(PIN_LED, LOW);
-        idleWait(rng_range(IDLE_MIN_MS, IDLE_MAX_MS)); // R: 3–8 s gap — moles can't learn the interval
-    }
+    deepSleepMs(rng_range(SLEEP_MIN_MS, SLEEP_MAX_MS)); // R: 30–180 s silence — moles can't learn the interval
+    // deepSleepMs does not return — ESP32 wakes and restarts from setup()
 }

@@ -58,40 +58,26 @@ current from ~5µA to ~1–3mA — a battery life trade-off to evaluate against 
 
 ## 2. Mobile App Support
 
-### What it does
-Allows the user to monitor device status, configure parameters (sleep interval, pattern
-types, frequency range, detection threshold), and receive alerts via a smartphone app
-without physically accessing the buried device.
+### Status: on/off control implemented via HomeKit (2026-08-14)
 
-### Why it matters
-Outdoor buried devices are hard to check. Currently there is no way to know if the device
-is working, what its battery level is, or whether it has detected activity. An app
-connection makes the system observable and configurable from a phone.
+The ESP32 firmware now uses the HomeSpan library to expose a "Mole Repeller" on/off
+switch directly to Apple's Home app / Siri (HAP over WiFi) — no custom app needed.
+See `MoleRepeller/MoleRepeller.ino` header comment for WiFi/pairing setup.
 
-### How to implement
+**Tradeoff accepted:** HomeKit-over-WiFi requires the device to stay continuously
+connected, so this build removed the ESP32 deep-sleep cycle entirely (previously
+~10µA between cycles). Current draw is therefore much higher and continuous —
+suited to mains or frequently-recharged power, not long-runtime battery-only
+deployments. A future two-device split (always-on HomeSpan hub indoors + the
+battery-powered field unit syncing over ESP-NOW on each wake) would restore deep
+sleep on the buried unit if long battery runtime becomes a priority again.
 
-**Communication options:**
-
-| Technology | Range | Power draw | Module |
-|---|---|---|---|
-| Bluetooth LE (BLE) | ~10–30 m | Very low | HM-10 / HC-08 (UART, AT commands) |
-| WiFi | ~50 m (router needed) | High | ESP-01 / ESP8266 |
-| LoRa | ~1–5 km | Low | Ra-02 / RFM95W |
-
-**Recommended approach — HM-10 Bluetooth LE:**
-- HM-10 communicates over UART at 3.3V logic. Use a voltage divider on the RX line for
-  the 5V Pro Mini.
-- Connect: HM-10 TX → Arduino D2 (SoftwareSerial RX), HM-10 RX → Arduino D3 via divider.
-- Build a simple app in MIT App Inventor, Flutter, or Swift/Kotlin that connects via BLE
-  and sends/receives ASCII commands.
-
-**Example command protocol:**
-```
-App → Device:    "STATUS\n"           → "BAT:3.8V ACT:42 DET:7\n"
-App → Device:    "SET SLEEP 60\n"     → adjust SLEEP_MIN_MS at runtime
-App → Device:    "SET FREQ 100 600\n" → adjust FREQ_MIN / FREQ_MAX
-App → Device:    "TRIGGER\n"          → force immediate runCycle()
-```
+### What's still open
+Richer status/config (battery level, activity/detection counts, adjustable sleep
+interval, pattern types, frequency range, detection threshold) is not yet exposed.
+HomeSpan supports additional characteristics (e.g. a read-only sensor service, or
+custom characteristics) if this is wanted later — evaluate against the HomeKit
+category constraints before adding.
 
 **Firmware changes needed:**
 - Add `SoftwareSerial ble(2, 3)` and a lightweight command parser in `loop()`.
